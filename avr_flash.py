@@ -25,6 +25,9 @@ class AVRFlashGUI(tk.Tk):
         self.hdr_files = []
         self.last_build_folder = None  # To store the path of the last build folder
 
+        self.programmer_options = ["arduino", "xplainedmini"]
+        self.selected_programmer = tk.StringVar(value=self.programmer_options[0])
+
         # Table for selected C files
         self.c_files_tree = ttk.Treeview(self, columns=('C Files',), show='headings', height=10)
         self.c_files_tree.heading('C Files', text='Selected C Files')
@@ -40,17 +43,22 @@ class AVRFlashGUI(tk.Tk):
         self.mcu_dropdown = ttk.Combobox(self, textvariable=self.selected_mcu, values=self.mcu_options)
         self.mcu_dropdown.grid(row=4, column=1, pady=5, sticky='nsew')
 
+        # Programmer Dropdown
+        tk.Label(self, text="Select Programmer:").grid(row=5, column=0, pady=5)
+        self.programmer_dropdown = ttk.Combobox(self, textvariable=self.selected_programmer, values=self.programmer_options)
+        self.programmer_dropdown.grid(row=5, column=1, pady=5, sticky='nsew')
+
         # Serial Port Entry
-        tk.Label(self, text="Serial Port (Leave empty for auto-detect):").grid(row=5, column=0, pady=5)
+        tk.Label(self, text="Serial Port (Leave empty for auto-detect):").grid(row=6, column=0, pady=5)
         self.serial_port_entry = tk.Entry(self, textvariable=self.serial_port_var)
-        self.serial_port_entry.grid(row=5, column=1, pady=5, sticky='nsew')
+        self.serial_port_entry.grid(row=6, column=1, pady=5, sticky='nsew')
 
         # Buttons
-        tk.Button(self, text="Select C Files", command=self.select_c_files).grid(row=6, column=0, pady=10, sticky='nsew')
-        tk.Button(self, text="Select H Files", command=self.select_h_files).grid(row=6, column=1, pady=10, sticky='nsew')
-        tk.Button(self, text="Create", command=self.create).grid(row=7, column=0, pady=10, sticky='nsew')
-        tk.Button(self, text="Flash", command=self.flash).grid(row=7, column=1, pady=10, sticky='nsew')
-        tk.Button(self, text="Clean", command=self.clean).grid(row=7, column=2, pady=10, sticky='nsew')
+        tk.Button(self, text="Select C Files", command=self.select_c_files).grid(row=1, column=0, pady=10, sticky='nsew')
+        tk.Button(self, text="Select H Files", command=self.select_h_files).grid(row=1, column=1, pady=10, sticky='nsew')
+        tk.Button(self, text="Create", command=self.create).grid(row=8, column=0, pady=10, sticky='nsew')
+        tk.Button(self, text="Flash", command=self.flash).grid(row=8, column=1, pady=10, sticky='nsew')
+        tk.Button(self, text="Clean", command=self.clean).grid(row=8, column=2, pady=10, sticky='nsew')
 
         self.grid_rowconfigure(0, weight=1)
         self.grid_columnconfigure(0, weight=1)
@@ -96,16 +104,33 @@ class AVRFlashGUI(tk.Tk):
         serial_port = self.serial_port_var.get().strip()
 
         if not serial_port:
-            serial_port = self.find_arduino_port()
+            try:
+                serial_port = self.find_arduino_port()
+            except:
+                serial_port = "usb"
 
         if serial_port:
             if self.last_build_folder:
-                os.system(f"avrdude -p {self.selected_mcu.get()} -c arduino -U flash:w:{self.last_build_folder}/{TARGET}.hex:i -F -P {serial_port}")
-                print(f"{TARGET}.hex has been flashed to Microcontroller ({self.selected_mcu.get()}) on port {serial_port}")
+                try:
+                    os.system(f"avrdude -p {self.selected_mcu.get()} -c {self.selected_programmer.get()} -U flash:w:{self.last_build_folder}/{TARGET}.hex:i -F -P usb")
+                except Exception as usb_flash_error:
+                    try:
+                        os.system(f"avrdude -p {self.selected_mcu.get()} -c {self.selected_programmer.get()} -U flash:w:{self.last_build_folder}/{TARGET}.hex:i -F -P {serial_port}")
+                    except Exception as serial_flash_error:
+                        print(f"Failed to flash with -P usb: {usb_flash_error}")
+                        print(f"Failed to flash with specified serial port: {serial_flash_error}")
+                        print("Please check your connections and try again.")
+                else:
+                    print(f"{TARGET}.hex has been flashed to Microcontroller ({self.selected_mcu.get()}) using -P usb")
             else:
                 print("No build folder available. Please create a build first.")
         else:
-            messagebox.showerror("Error", "Unable to find Arduino serial port. Please specify a valid serial port.")
+            messagebox.showerror("Error", "Unable to find Arduino serial port. Please specify a valid serial port or check your connections.")
+
+        try:
+            os.system(f"avrdude -p {self.selected_mcu.get()} -c {self.selected_programmer.get()} -U flash:w:{self.last_build_folder}/{TARGET}.hex:i -F -P usb")
+        except Exception as usb_flash_error:
+            messagebox.showerror("Error", "Unable to find Arduino serial port. Please specify a valid serial port or check your connections.")
 
     def find_arduino_port(self):
         arduino_ports = [p.device for p in serial.tools.list_ports.comports() if "arduino" in p.description.lower()]
