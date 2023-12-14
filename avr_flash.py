@@ -132,6 +132,42 @@ class AVRFlashGUI(tk.Tk):
         except Exception as usb_flash_error:
             messagebox.showerror("Error", "Unable to find Arduino serial port. Please specify a valid serial port or check your connections.")
 
+    def new_flash(self):
+        # Use the last generated hex file
+        build_folders = [f for f in os.listdir(DATA_FOLDER) if f.startswith("build_")]
+        if not build_folders:
+            print("No build folders found. Please create a build first.")
+            return
+
+        last_build_folder = os.path.join(DATA_FOLDER, max(build_folders))
+        hex_file_path = os.path.join(last_build_folder, f"{TARGET}.hex")
+
+        if not os.path.exists(hex_file_path):
+            print("No hex file found. Please create a build first.")
+            return
+
+        serial_port = self.serial_port_var.get().strip()
+
+        if self.selected_programmer.get() == "xplainedmini":
+            serial_port = "usb"
+        elif not serial_port:
+            try:
+                serial_port = self.find_arduino_port()
+            except Exception as e:
+                print(f"Error finding Arduino serial port: {e}")
+                return
+
+        if not serial_port:
+            print("Unable to find Arduino serial port. Please specify a valid serial port or check your connections.")
+            return
+
+        try:
+            os.system(f"avrdude -p {self.selected_mcu.get()} -c {self.selected_programmer.get()} -U flash:w:{hex_file_path}:i -F -P {serial_port}")
+            print(f"{TARGET}.hex has been flashed to Microcontroller ({self.selected_mcu.get()}) using -P {serial_port}")
+        except Exception as flash_error:
+            print(f"Failed to flash: {flash_error}")
+            print("Please check your connections and try again.")
+
     def find_arduino_port(self):
         arduino_ports = [p.device for p in serial.tools.list_ports.comports() if "arduino" in p.description.lower()]
         if arduino_ports:
